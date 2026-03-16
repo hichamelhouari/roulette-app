@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Roulette de Chance</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: sans-serif; background: #0f0f1a; color: white; }
+  .result-pop { animation: pop 0.4s ease; }
+  @keyframes pop { 0%{transform:scale(1)} 50%{transform:scale(1.08)} 100%{transform:scale(1)} }
+</style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
+  <h1 class="text-4xl font-bold mb-1 text-center">🎰 Roulette de Chance</h1>
+  <p class="text-gray-400 mb-6 text-center">Tourne et découvre ton destin !</p>
+
+  <div class="relative mb-4" style="width:280px;height:280px;">
+    <div style="position:absolute;top:-18px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:12px solid transparent;border-right:12px solid transparent;border-top:28px solid white;z-index:10;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5))"></div>
+    <canvas id="wheel" width="280" height="280" style="border-radius:50%;"></canvas>
+    <button id="spinBtn" onclick="spin()" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:54px;height:54px;border-radius:50%;background:white;border:2px solid #ccc;cursor:pointer;font-size:22px;z-index:10;color:#333;transition:transform 0.1s;" onmouseover="this.style.transform='translate(-50%,-50%) scale(1.08)'" onmouseout="this.style.transform='translate(-50%,-50%)'">▶</button>
+  </div>
+
+  <div id="result" class="text-2xl font-semibold mb-6 text-center min-h-12 px-4 py-3 rounded-xl bg-white/10 w-full max-w-sm">Clique pour tourner !</div>
+
+  <div class="grid grid-cols-2 gap-4 w-full max-w-sm">
+    <div class="bg-white/10 rounded-xl p-4">
+      <h3 class="text-sm font-medium text-gray-300 mb-2">Cases</h3>
+      <div class="flex gap-2 mb-2">
+        <input id="newSlot" type="text" placeholder="Ajouter..." maxlength="20" onkeydown="if(event.key==='Enter')addSlot()" class="flex-1 bg-white/10 border border-white/20 rounded-lg px-2 py-1 text-sm text-white placeholder-gray-500 outline-none" />
+        <button onclick="addSlot()" class="bg-white/20 hover:bg-white/30 px-3 rounded-lg text-sm font-bold">+</button>
+      </div>
+      <div id="slotList" class="flex flex-col gap-1 max-h-36 overflow-y-auto"></div>
+    </div>
+    <div class="bg-white/10 rounded-xl p-4">
+      <h3 class="text-sm font-medium text-gray-300 mb-2">Historique</h3>
+      <div id="histList" class="flex flex-col gap-1 max-h-44 overflow-y-auto text-sm text-gray-400">Pas encore de résultats</div>
+    </div>
+  </div>
+
+<script>
+const COLORS=['#7F77DD','#1D9E75','#D85A30','#378ADD','#BA7517','#D4537E','#639922','#E24B4A','#0F6E56','#533AB7'];
+let slots=['Bonne chance !','Essaie encore','Jackpot !','Pas de chance','Super !','Oups...','Bravo !','Courage !'];
+let history=[],spinning=false,currentAngle=0;
+const canvas=document.getElementById('wheel'),ctx=canvas.getContext('2d');
+
+function drawWheel(){
+  const cx=140,cy=140,r=135;
+  ctx.clearRect(0,0,280,280);
+  if(!slots.length){ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fillStyle='#333';ctx.fill();return;}
+  const arc=(Math.PI*2)/slots.length;
+  slots.forEach((s,i)=>{
+    const start=currentAngle+i*arc,end=start+arc;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r,start,end);ctx.closePath();
+    ctx.fillStyle=COLORS[i%COLORS.length];ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.3)';ctx.lineWidth=1.5;ctx.stroke();
+    ctx.save();ctx.translate(cx,cy);ctx.rotate(start+arc/2);
+    ctx.textAlign='right';ctx.fillStyle='#fff';ctx.font='500 12px sans-serif';
+    ctx.shadowColor='rgba(0,0,0,0.4)';ctx.shadowBlur=2;
+    let txt=s;const maxW=r*0.72;
+    if(ctx.measureText(txt).width>maxW){while(ctx.measureText(txt+'…').width>maxW&&txt.length>1)txt=txt.slice(0,-1);txt+='…';}
+    ctx.fillText(txt,r-8,4);ctx.restore();
+  });
+  ctx.beginPath();ctx.arc(cx,cy,28,0,Math.PI*2);ctx.fillStyle='white';ctx.fill();
+}
+
+function renderSlots(){
+  const el=document.getElementById('slotList');
+  el.innerHTML=slots.length?slots.map((s,i)=>`<div style="display:flex;align-items:center;gap:6px;font-size:12px;padding:3px 6px;border-radius:6px;background:rgba(255,255,255,0.08)"><span style="width:8px;height:8px;border-radius:50%;background:${COLORS[i%COLORS.length]};flex-shrink:0"></span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s}</span><button onclick="removeSlot(${i})" style="background:none;border:none;color:#aaa;cursor:pointer;font-size:13px">✕</button></div>`).join(''):'<div style="font-size:12px;color:#888;text-align:center;padding:8px">Aucune case</div>';
+}
+
+function renderHistory(){
+  const el=document.getElementById('histList');
+  el.innerHTML=history.length?history.slice().reverse().map((h,i)=>`<div style="display:flex;align-items:center;gap:6px;padding:3px 6px;border-radius:6px;background:rgba(255,255,255,0.08)"><span style="width:8px;height:8px;border-radius:50%;background:${h.color};flex-shrink:0"></span><span style="flex:1">${h.text}</span><span style="font-size:10px;color:#888">#${history.length-i}</span></div>`).join(''):'<div style="text-align:center;padding:8px">Pas encore</div>';
+}
+
+function addSlot(){
+  const inp=document.getElementById('newSlot'),val=inp.value.trim();
+  if(!val)return;slots.push(val);inp.value='';drawWheel();renderSlots();
+}
+
+function removeSlot(i){if(!spinning){slots.splice(i,1);drawWheel();renderSlots();}}
+
+function beep(freq,dur,type='sine'){try{const a=new(window.AudioContext||window.webkitAudioContext)(),o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.value=freq;o.type=type;g.gain.setValueAtTime(0.12,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+dur);o.start();o.stop(a.currentTime+dur);}catch(e){}}
+
+function spin(){
+  if(spinning||!slots.length)return;
+  spinning=true;document.getElementById('spinBtn').textContent='⏸';
+  document.getElementById('result').textContent='...';
+  const extra=Math.PI*2*(6+Math.random()*6);
+  const winIdx=Math.floor(Math.random()*slots.length);
+  const arc=(Math.PI*2)/slots.length;
+  const targetAngle=-winIdx*arc-arc/2-(Math.PI/2)-(currentAngle%(Math.PI*2));
+  const totalRot=extra+((targetAngle%(Math.PI*2))+Math.PI*2)%(Math.PI*2);
+  const duration=4000+Math.random()*1500,start=performance.now(),startAngle=currentAngle;
+  let lastTick=0;
+  function animate(now){
+    const elapsed=now-start,progress=Math.min(elapsed/duration,1),ease=1-Math.pow(1-progress,4);
+    currentAngle=startAngle+totalRot*ease;
+    const speed=(totalRot*4*Math.pow(1-progress,3))/duration;
+    if(now-lastTick>Math.max(50,300-speed*8000)){beep(300+Math.random()*200,0.04,'square');lastTick=now;}
+    drawWheel();
+    if(progress<1){requestAnimationFrame(animate);}
+    else{
+      spinning=false;document.getElementById('spinBtn').textContent='▶';
+      const winner=slots[winIdx],color=COLORS[winIdx%COLORS.length];
+      const r=document.getElementById('result');
+      r.textContent='🎉 '+winner;r.style.borderColor=color;
+      r.classList.remove('result-pop');void r.offsetWidth;r.classList.add('result-pop');
+      history.push({text:winner,color});renderHistory();
+      beep(523,0.1);setTimeout(()=>beep(659,0.1),100);setTimeout(()=>beep(784,0.2),200);
+    }
+  }
+  requestAnimationFrame(animate);
+}
+drawWheel();renderSlots();renderHistory();
+</script>
+</body>
+</html>
